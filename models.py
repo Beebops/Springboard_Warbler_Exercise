@@ -1,9 +1,11 @@
 """SQLAlchemy models for Warbler."""
 
 from datetime import datetime
-
+import bcrypt
 from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
+
+from werkzeug.security import check_password_hash
 
 bcrypt = Bcrypt()
 db = SQLAlchemy()
@@ -111,6 +113,10 @@ class User(db.Model):
 
         found_user_list = [user for user in self.following if user == other_user]
         return len(found_user_list) == 1
+
+    def check_password(self, password):
+        """Check if the provided password matches the user's password hash"""
+        return bcrypt.check_password_hash(self.password, password)
 
     @classmethod
     def signup(cls, username, email, password, image_url):

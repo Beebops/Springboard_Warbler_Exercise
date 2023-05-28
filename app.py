@@ -221,9 +221,18 @@ def profile(user_id):
         return redirect("/")
 
     user = User.query.get_or_404(user_id)
+
+    if g.user.id != user.id:
+        flash("You do not have permission to edit this profile.", "danger")
+        return redirect("/")
+
     form = EditUserProfileForm(obj=user)
 
     if form.validate_on_submit():
+        if not user.check_password(form.current_password.data):
+            flash("Incorrect current password.", "danger")
+            return redirect("/")
+
         user.username = form.username.data
         user.email = form.email.data
         user.image_url = form.image_url.data or User.image_url.default.arg
@@ -232,7 +241,7 @@ def profile(user_id):
 
         db.session.commit()
         flash("Profile updated successfully.", "success")
-        return redirect(f"/users/{user_id}/profile")
+        return redirect(f"/users/{user.id}")
 
     return render_template("users/edit.html", form=form, user=user)
 
