@@ -1,6 +1,6 @@
 import os
-
-from flask import Flask, render_template, request, flash, redirect, session, g
+from sqlalchemy import func
+from flask import Flask, render_template, request, flash, redirect, session, g, abort
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
@@ -135,8 +135,9 @@ def list_users():
     if not search:
         users = User.query.all()
     else:
-        users = User.query.filter(User.username.like(f"%{search}%")).all()
-
+        users = User.query.filter(
+            func.lower(User.username).like(f"%{search.lower()}%")
+        ).all()
     return render_template("users/index.html", users=users)
 
 
@@ -180,6 +181,51 @@ def users_followers(user_id):
 
     user = User.query.get_or_404(user_id)
     return render_template("users/followers.html", user=user)
+
+
+@app.route("/users/<int:user_id>/likes", methods=["GET"])
+def show_likes(user_id):
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    user = User.query.get_or_404(user_id)
+    return render_template("users/likes.html", user=user, likes=user.likes)
+
+
+@app.route("/users/add_like/<int:message_id>/like", methods=["POST"])
+def add_like(message_id):
+    """Toggle liked messaged for logged in user"""
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    # add message_id to user.likes if message is not user's message
+    liked_message = Message.query.get_or_404(message_id)
+    if liked_message.user_id == g.user.id:
+        return abort(403)
+
+    like_value = int(request.form.get("like"))  # Get the value of the "like" field
+
+    user_likes = g.user.likes
+
+    if like_value == 1:  # liked
+        if liked_message not in user_likes:
+            user_likes.append(liked_message)
+    elif like_value == 0:  # not liked
+        if liked_message in user_likes:
+            user_likes.remove(liked_message)
+    # if liked_message in user_likes:
+    #     g.user.likes = [like for like in user_likes if like != liked_message]
+    # else:
+    #     g.user.likes.append(liked_message)
+
+    db.session.commit()
+    # import pdb
+
+    # pdb.set_trace()
+    print(liked_message)
+    return redirect("/")
 
 
 @app.route("/users/follow/<int:follow_id>", methods=["POST"])
@@ -238,6 +284,7 @@ def profile(user_id):
         user.image_url = form.image_url.data or User.image_url.default.arg
         user.header_image_url = form.header_image_url.data
         user.bio = form.bio.data
+        user.location = form.location.data
 
         db.session.commit()
         flash("Profile updated successfully.", "success")
@@ -325,9 +372,19 @@ def homepage():
     """
 
     if g.user:
-        messages = Message.query.order_by(Message.timestamp.desc()).limit(100).all()
+        # Get the IDs of the users the logged-in user is following
+        followed_user_ids = [user.id for user in g.user.following]
+        # Include the logged-in user's ID in the list
+        followed_user_ids.append(g.user.id)
+        # Query messages written by the logged-in user or the followed users
+        messages = (
+            Message.query.filter((Message.user_id.in_(followed_user_ids)))
+            .order_by(Message.timestamp.desc())
+            .limit(100)
+            .all()
+        )
 
-        return render_template("home.html", messages=messages)
+        return render_template("home.html", messages=messages, user=g.user)
 
     else:
         return render_template("home-anon.html")

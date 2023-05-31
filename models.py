@@ -5,8 +5,6 @@ import bcrypt
 from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
 
-from werkzeug.security import check_password_hash
-
 bcrypt = Bcrypt()
 db = SQLAlchemy()
 
@@ -38,9 +36,7 @@ class Likes(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="cascade"))
 
-    message_id = db.Column(
-        db.Integer, db.ForeignKey("messages.id", ondelete="cascade"), unique=True
-    )
+    message_id = db.Column(db.Integer, db.ForeignKey("messages.id", ondelete="cascade"))
 
 
 class User(db.Model):
@@ -101,6 +97,9 @@ class User(db.Model):
 
     def __repr__(self):
         return f"<User #{self.id}: {self.username}, {self.email}>"
+
+    # def add_like(self, msg_id):
+    #     """Add a like by pushing msg_id to a user's like list"""
 
     def is_followed_by(self, other_user):
         """Is this user followed by `other_user`?"""
